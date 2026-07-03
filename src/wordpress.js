@@ -5,6 +5,13 @@ function capTitle(title) {
   return `${title.slice(0, TITLE_MAX - 1).replace(/\s+\S*$/, '')}…`;
 }
 
+// Node/undici manda "User-Agent: node" por defecto — un fingerprint que
+// varios WAFs de hosting bloquean en endpoints de subida, sobre todo desde
+// IPs de datacenter (como las de GitHub Actions). Un UA de navegador real
+// evita el bloqueo sin cambiar nada del lado de WordPress.
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+
 // Cliente WordPress ligado a un sitio (URL + credenciales + plugin SEO).
 export function createWpClient(site) {
   const BASE_URL = `${site.wpUrl}/wp-json/wp/v2`;
@@ -16,6 +23,8 @@ export function createWpClient(site) {
       ...options,
       headers: {
         Authorization: authHeader,
+        'User-Agent': BROWSER_UA,
+        Referer: site.wpUrl,
         ...options.headers,
       },
     });
@@ -29,7 +38,7 @@ export function createWpClient(site) {
     }
 
     if (!res.ok) {
-      const message = body?.message || body?.code || JSON.stringify(body);
+      const message = body?.message || body?.code || JSON.stringify(body).slice(0, 300);
       throw new Error(`WordPress API error ${res.status}: ${message}`);
     }
 
@@ -44,12 +53,20 @@ export function createWpClient(site) {
       form.append('title', altText);
     }
 
-    const data = await wpFetch('/media', {
-      method: 'POST',
-      body: form,
-    });
-
-    return { id: data.id, url: data.source_url };
+    // El endpoint de subida es el más sensible a WAF; reintenta una vez si
+    // el edge lo bloquea (415/403) — a veces es un bloqueo por IP transitorio.
+    let lastErr;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const data = await wpFetch('/media', { method: 'POST', body: form });
+        return { id: data.id, url: data.source_url };
+      } catch (err) {
+        lastErr = err;
+        if (!/WordPress API error (415|403)/.test(err.message)) throw err;
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+    throw lastErr;
   }
 
   // Busca cada etiqueta por nombre; si no existe la crea. Devuelve los term IDs.

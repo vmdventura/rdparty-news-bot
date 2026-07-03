@@ -138,6 +138,7 @@ function createSiteBot(site) {
         );
       }
     } catch (err) {
+      console.error(`[${site.key}] Error procesando ${url}:`, err.message);
       await ctx.telegram.deleteMessage(ctx.chat.id, status.message_id).catch(() => {});
       await ctx.reply(`Error al procesar la noticia:\n${err.message}`);
     } finally {
