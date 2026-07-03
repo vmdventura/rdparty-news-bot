@@ -199,6 +199,7 @@ function createSiteBot(site) {
       '1. Envia /noticia [URL] o simplemente pega una URL\n' +
       '2. Luego envia la foto para la noticia\n' +
       '   (o envia la foto con la URL en el caption)\n\n' +
+      `Si envías varias noticias seguidas, la primera se publica de inmediato y las siguientes se programan automáticamente (mínimo ${site.publishSpacingMinutes} min entre sí) para no amontonar publicaciones en el mismo horario.\n\n` +
       '/tendencias — qué está sonando ahora en RD (Twitter/X + Google)\n' +
       '/cancelar — cancela la operacion actual'
     );
