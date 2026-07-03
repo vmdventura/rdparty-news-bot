@@ -30,7 +30,18 @@ function buildContent({ html, imageAlt, mediaUrl, seccionNombre, internalLink, s
 
 function createSiteBot(site) {
   const wp = createWpClient(site);
-  const bot = new Telegraf(site.telegramToken);
+  // handlerTimeout por defecto de Telegraf (90s) se queda corto: el bot puede
+  // hacer hasta 3 intentos de redacción con Claude para cumplir el SEO, más
+  // scraping e imagen — todo eso junto puede pasar de los 90s fácilmente.
+  const bot = new Telegraf(site.telegramToken, { handlerTimeout: 600_000 });
+
+  // Red de seguridad: sin esto, cualquier error no capturado (incluido un
+  // timeout de Telegraf) tumba TODO el proceso — el bot deja de responder
+  // hasta que alguien lo reinicie a mano. Con esto, el bot loguea y sigue vivo.
+  bot.catch((err, ctx) => {
+    console.error(`[${site.key}] Error no capturado en el bot:`, err.message);
+    ctx.reply(`Error interno del bot:\n${err.message}`).catch(() => {});
+  });
 
   const allowed = new Set(
     site.allowedUsers.split(',').map(id => id.trim()).filter(Boolean)
