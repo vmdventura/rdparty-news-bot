@@ -13,9 +13,10 @@ function escapeAttr(s = '') {
 }
 
 // Inserta la foto (con alt = keyword) tras el primer párrafo, y añade al
-// final el enlace a la fuente (externo) y a la sección del sitio (interno).
-// El análisis SEO puntúa: imagen con keyword en alt, enlace externo e interno.
-function buildContent({ html, imageAlt, mediaUrl, sourceUrl, seccionNombre, internalLink, siteName }) {
+// final el enlace interno a la sección del sitio. El análisis SEO puntúa:
+// imagen con keyword en alt y enlace interno. Sin crédito externo a la
+// fuente (no le regalamos enlace/autoridad a la competencia).
+function buildContent({ html, imageAlt, mediaUrl, seccionNombre, internalLink, siteName }) {
   let out = html;
   const figure = `<figure class="wp-block-image size-large"><img src="${escapeAttr(mediaUrl)}" alt="${escapeAttr(imageAlt)}"/></figure>`;
   const firstP = out.indexOf('</p>');
@@ -23,9 +24,7 @@ function buildContent({ html, imageAlt, mediaUrl, sourceUrl, seccionNombre, inte
     ? `${out.slice(0, firstP + 4)}\n${figure}\n${out.slice(firstP + 4)}`
     : `${figure}\n${out}`;
 
-  const host = new URL(sourceUrl).hostname.replace(/^www\./, '');
-  out += `\n<p><em>Fuente: <a href="${escapeAttr(sourceUrl)}" target="_blank" rel="noopener">${escapeAttr(host)}</a>. ` +
-    `Más noticias de ${escapeAttr(seccionNombre)} en <a href="${escapeAttr(internalLink)}">${escapeAttr(siteName)}</a>.</em></p>`;
+  out += `\n<p><em>Más noticias de ${escapeAttr(seccionNombre)} en <a href="${escapeAttr(internalLink)}">${escapeAttr(siteName)}</a>.</em></p>`;
   return out;
 }
 
@@ -112,7 +111,6 @@ function createSiteBot(site) {
         html: article.html,
         imageAlt,
         mediaUrl: media.url,
-        sourceUrl: url,
         seccionNombre,
         internalLink: siteUrl + site.internalLinkPath(article.seccion_slug),
         siteName: site.nombre,
