@@ -59,7 +59,10 @@ function createSiteBot(site) {
     return sessions.get(userId);
   }
 
-  async function processArticle(ctx, url, photoFileId) {
+  // Continúa el pipeline una vez que ya tenemos texto del artículo — sea por
+  // scraping automático o porque el usuario lo pegó a mano (sitios con todo
+  // el contenido en JavaScript, como DAZN, no dejan nada que leer en el HTML).
+  async function processArticleCore(ctx, { url, title, text, photoFileId }) {
     const userId = String(ctx.from.id);
     const session = getSession(userId);
     session.state = 'PROCESSING';
@@ -67,9 +70,6 @@ function createSiteBot(site) {
     const status = await ctx.reply('Procesando noticia... esto puede tardar 1-2 minutos.');
 
     try {
-      // 1. Scrape article content
-      const { title, text } = await scrapeArticle(url);
-
       // 2. Secciones del sitio: taxonomía 'deporte' en DeportesDO,
       //    categorías nativas en los demás sitios.
       const secciones = site.usaTaxonomiaDeporte
@@ -162,6 +162,30 @@ function createSiteBot(site) {
     }
   }
 
+  // Intenta leer la URL automáticamente. Si el sitio no sirve contenido
+  // estático (ej. DAZN, apps 100% en React) o bloquea el scraping, en vez
+  // de fallar le pide al usuario que pegue el texto del artículo a mano.
+  async function processArticle(ctx, url, photoFileId) {
+    const userId = String(ctx.from.id);
+    const session = getSession(userId);
+
+    let title, text;
+    try {
+      ({ title, text } = await scrapeArticle(url));
+    } catch (err) {
+      session.state = 'WAITING_TEXT_FALLBACK';
+      session.pendingUrl = url;
+      session.pendingPhotoFileId = photoFileId;
+      await ctx.reply(
+        `No pude leer ese artículo automáticamente (${err.message}).\n\n` +
+        `Copia y pega aquí el texto completo de la noticia y continúo con eso. O /cancelar.`
+      );
+      return;
+    }
+
+    await processArticleCore(ctx, { url, title, text, photoFileId });
+  }
+
   // Auth middleware
   bot.use((ctx, next) => {
     if (!isAllowed(ctx)) return ctx.reply('No autorizado.');
@@ -231,10 +255,22 @@ function createSiteBot(site) {
     ctx.reply('URL guardada. Ahora envia la foto para la noticia.');
   });
 
-  // Handle plain text messages — detect URLs
+  // Handle plain text messages — detect URLs, o texto pegado a mano si el
+  // scraping automático falló (ver processArticle)
   bot.on('text', ctx => {
     const session = getSession(String(ctx.from.id));
     if (session.state === 'PROCESSING') return ctx.reply('Ya estoy procesando una noticia. Espera.');
+
+    if (session.state === 'WAITING_TEXT_FALLBACK') {
+      const pastedText = ctx.message.text.trim();
+      if (pastedText.length < 100) {
+        return ctx.reply('Ese texto es muy corto para redactar el artículo. Pega el texto completo de la noticia, o /cancelar.');
+      }
+      const { pendingUrl, pendingPhotoFileId } = session;
+      session.state = 'IDLE';
+      processArticleCore(ctx, { url: pendingUrl, title: '', text: pastedText, photoFileId: pendingPhotoFileId });
+      return;
+    }
 
     const urlMatch = ctx.message.text.match(URL_REGEX);
     if (!urlMatch) {
