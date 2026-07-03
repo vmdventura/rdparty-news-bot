@@ -150,8 +150,23 @@ export function createWpClient(site) {
     };
   }
 
+  // Espaciado entre publicaciones: si el bot procesa varias noticias seguidas,
+  // no queremos que todas salgan con el mismo timestamp (se ve mal en el home
+  // y no aporta a la señal de "contenido fresco" para SEO). nextSlot vive en
+  // el closure del cliente: se resetea con cada reinicio del proceso, lo cual
+  // es aceptable — solo espacia publicaciones dentro de la misma sesión.
+  const spacingMs = (site.publishSpacingMinutes ?? 0) * 60_000;
+  const MIN_DELAY_MS = 60_000; // por debajo de esto, publicar de una vez
+  let nextSlot = 0;
+
   async function createPost({ title, html, excerpt, slug, focus_keyword, meta_description, mediaId, deporteId, categoryId, tagIds }) {
     const safeTitle = capTitle(title);
+
+    const now = Date.now();
+    const slot = Math.max(now, nextSlot);
+    const shouldSchedule = spacingMs > 0 && slot - now > MIN_DELAY_MS;
+    nextSlot = slot + spacingMs;
+
     const payload = {
       title: safeTitle,
       content: html,
@@ -161,6 +176,7 @@ export function createWpClient(site) {
       ...(deporteId ? { deporte: [deporteId] } : {}),
       ...(categoryId ? { categories: [categoryId] } : {}),
       ...(tagIds?.length ? { tags: tagIds } : {}),
+      ...(shouldSchedule ? { date_gmt: new Date(slot).toISOString() } : {}),
       meta: buildSeoMeta({ safeTitle, focus_keyword, meta_description }),
     };
 
@@ -172,8 +188,13 @@ export function createWpClient(site) {
       });
 
     try {
-      const data = await post('publish');
-      return { id: data.id, url: data.link, published: true };
+      const data = await post(shouldSchedule ? 'future' : 'publish');
+      return {
+        id: data.id,
+        url: data.link,
+        status: shouldSchedule ? 'future' : 'publish',
+        scheduledFor: shouldSchedule ? new Date(slot) : null,
+      };
     } catch (err) {
       if (!/WordPress API error 40[13]/.test(err.message)) throw err;
 
@@ -181,7 +202,7 @@ export function createWpClient(site) {
       // para no perder la redacción.
       try {
         const data = await post('draft');
-        return { id: data.id, url: data.link, published: false };
+        return { id: data.id, url: data.link, status: 'draft', scheduledFor: null };
       } catch {
         const who = await getCurrentUser().catch(() => null);
         const role = who?.roles?.join(', ') || 'desconocido';
