@@ -20,6 +20,6 @@ export const SITES = [
     internalLinkPath: slug => `/category/${slug}/`,
     // Si se procesan varias noticias seguidas, espacia sus publicaciones al
     // menos esto para no amontonar posts con el mismo timestamp en el home.
-    publishSpacingMinutes: 20,
+    publishSpacingMinutes: 90,
   },
 ].filter(s => s.telegramToken && s.wpUrl && s.wpUser && s.wpPass);
