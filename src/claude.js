@@ -106,10 +106,19 @@ export function validateArticle(a) {
   return issues;
 }
 
-const MAX_ATTEMPTS = 3;
+// Antes: 3 intentos y cada reintento reenviaba TODA la conversación previa
+// (el tool_use completo del intento anterior, con el artículo entero de
+// ~800 palabras, más el tool_result). Eso hace que el input crezca en cada
+// vuelta — el intento 3 pagaba el costo del 1 + el 2 + el 3 en tokens de
+// entrada. Ahora cada intento es un turno nuevo e independiente: solo se le
+// pasa la fuente original + un resumen corto de qué corregir (no el borrador
+// completo anterior). El costo por intento se mantiene plano en vez de
+// acumularse, y se bajó el tope de 3 a 2 — casi todos los artículos pasan la
+// validación en el primer intento.
+const MAX_ATTEMPTS = 2;
 
 export async function rewriteArticle({ title, text, sourceUrl, seccionSlugs, editorial }) {
-  const userMessage = `Reescribe esta noticia:
+  const baseMessage = `Reescribe esta noticia:
 
 TÍTULO ORIGINAL: ${title}
 URL FUENTE: ${sourceUrl}
@@ -117,17 +126,21 @@ URL FUENTE: ${sourceUrl}
 CONTENIDO:
 ${text}`;
 
-  const messages = [{ role: 'user', content: userMessage }];
   let article = null;
+  let feedback = '';
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const userMessage = feedback
+      ? `${baseMessage}\n\nIMPORTANTE: tu intento anterior no cumplió estos requisitos SEO. Corrígelos TODOS en esta nueva versión:\n- ${feedback}`
+      : baseMessage;
+
     const response = await client.messages.create({
       model: 'claude-sonnet-5',
       max_tokens: 8192,
       system: buildSystemPrompt(editorial),
       tools: [buildArticleTool(seccionSlugs)],
       tool_choice: { type: 'tool', name: 'publicar_noticia' },
-      messages,
+      messages: [{ role: 'user', content: userMessage }],
     });
 
     const toolBlock = response.content.find(b => b.type === 'tool_use' && b.name === 'publicar_noticia');
@@ -141,16 +154,7 @@ ${text}`;
     }
 
     console.log(`Intento ${attempt}: corrigiendo SEO —`, issues);
-    messages.push({ role: 'assistant', content: response.content });
-    messages.push({
-      role: 'user',
-      content: [{
-        type: 'tool_result',
-        tool_use_id: toolBlock.id,
-        content: `El artículo NO cumple estos requisitos SEO. Corrígelos TODOS y vuelve a generar la noticia completa:\n- ${issues.join('\n- ')}`,
-        is_error: true,
-      }],
-    });
+    feedback = issues.join('\n- ');
   }
 
   return article;
