@@ -69,6 +69,11 @@ function createSiteBot(site) {
 
     const status = await ctx.reply('Procesando noticia... esto puede tardar 1-2 minutos.');
 
+    // Único punto de log de volumen real: cada vez que se llega aquí, se va
+    // a invocar a Claude sí o sí (con éxito o no). Sin esto no hay forma de
+    // saber desde Actions cuántas veces se llamó a la API por día.
+    console.log(`[${site.key}] Procesando: ${url}`);
+
     try {
       // 2. Secciones del sitio: taxonomía 'deporte' en DeportesDO,
       //    categorías nativas en los demás sitios.
@@ -138,6 +143,7 @@ function createSiteBot(site) {
       });
 
       await ctx.telegram.deleteMessage(ctx.chat.id, status.message_id).catch(() => {});
+      console.log(`[${site.key}] OK (${postStatus}): ${postUrl}`);
       const tagsInfo = tagIds.length ? ` · ${tagIds.length} etiquetas` : '';
       if (postStatus === 'publish') {
         await ctx.reply(`Noticia publicada exitosamente (${seccionNombre}${tagsInfo}):\n${postUrl}`);

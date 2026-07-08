@@ -29,7 +29,7 @@ jobs:
       - name: Instalar dependencias
         run: npm install
 
-      - name: Ejecutar bot (5h 40min maximo)
+      - name: Ejecutar bot (4h 50min maximo)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_ALLOWED_USERS: ${{ secrets.TELEGRAM_ALLOWED_USERS }}
@@ -40,7 +40,15 @@ jobs:
         run: |
           echo "Bot iniciando en $(date)"
           set +e
-          timeout 20400 node src/bot.js
+          # 17400s = 4h50min, MENOS que el intervalo del cron (5h). Así el
+          # proceso viejo siempre se apaga solo antes de que llegue el
+          # siguiente disparo — el relevo queda limpio por diseño, sin
+          # depender de que cancel-in-progress alcance a matarlo a tiempo.
+          # Con el timeout viejo (5h40min > 5h del cron) el proceso anterior
+          # SIEMPRE seguía vivo cuando arrancaba el nuevo, generando ~15-25s
+          # de dos instancias del bot compitiendo por el mismo token de
+          # Telegram en cada uno de los reinicios (4-5 veces al día).
+          timeout 17400 node src/bot.js
           EC=$?
           set -e
           echo "Bot detenido a las $(date) (exit $EC)"
