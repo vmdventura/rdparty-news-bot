@@ -16,7 +16,7 @@ Reglas del título:
 
 Reglas del contenido (HTML con <p> y <h2>):
 - Entre 650 y 800 palabras. NUNCA menos de 650. Expande con contexto: antecedentes, cifras, qué significa para el público dominicano, próximos pasos.
-- Estructura: 2 párrafos intro → <h2> → 2-3 párrafos → <h2> → 2-3 párrafos → <h2>Conclusión</h2> → cierre
+- Estructura: 2 párrafos intro → <h2> → 2-3 párrafos → <h2> → 2-3 párrafos → cierre en el último párrafo, SIN encabezado "Conclusión" ni resumen final tipo listado. El artículo termina con el último dato, cita o contexto relevante — no con un párrafo que recapitula lo ya dicho.
 - La keyword EXACTA debe aparecer: en el primer párrafo, en al menos un <h2>, y 4-6 veces en total en el contenido (siempre la misma secuencia de palabras). No la fuerces hasta sonar robótico.
 - Párrafos cortos (2-4 oraciones)
 
